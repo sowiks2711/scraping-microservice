@@ -7,7 +7,7 @@ from requests.exceptions import RequestException
 from contextlib import closing
 from bs4 import BeautifulSoup
 
-from definitions import IMAGES_DIR, ARCHIVES_DIR
+from definitions import IMAGES_DIR, ARCHIVES_DIR, TEXTS_DIR
 import shutil
 
 
@@ -51,20 +51,35 @@ class TextExtractor:
         return text
 
 
+def url_to_folder_name(url: str) -> str:
+    txt: str = ''.join(url.split('/'))
+    colon_index: int = txt.find(':')
+    if colon_index != -1:
+        txt = txt[colon_index+1:]
+
+    return txt
+
+
+def save_data_in_file(dir_path, filename, resource, mode='binary'):
+    filepath = os.path.join(dir_path, filename)
+    if mode == 'binary':
+        mode = 'wb'
+    elif mode == 'text':
+        mode ='w'
+    else:
+        raise ValueError(f'Only "binary" and "text" mode are allowed. Mode {mode} is not supported')
+    with open(filepath, mode) as f:
+        for chunk in resource:
+            f.write(chunk)
+
+
 class ImageScraper:
     def __init__(self, url: str, html_content_extractor: HtmlContentProvider = HtmlContentProvider()):
-        self._html_content_extractor = html_content_extractor
-        self.url = url
-        self._images_folder_name = self.url_to_folder_name(url) + str(uuid.uuid4())
-        self._images_folder_path = os.path.join(IMAGES_DIR, self._images_folder_name)
-
-    def url_to_folder_name(self, url: str) -> str:
-        txt: str = ''.join(url.split('/'))
-        colon_index: int = txt.find(':')
-        if colon_index != -1:
-            txt = txt[colon_index+1:]
-
-        return txt
+        self._html_content_extractor: HtmlContentProvider = html_content_extractor
+        self.url: str = url
+        self.resource_guid: str = str(uuid.uuid4())
+        self._images_folder_name: str = '_'.join([url_to_folder_name(url), self.resource_guid])
+        self._images_folder_path: str = os.path.join(IMAGES_DIR, self._images_folder_name)
 
     def pull_images_from_html_references(self) -> None:
         html_content: str = self._html_content_extractor.get_html(self.url)
@@ -76,7 +91,12 @@ class ImageScraper:
             src: str = res.get('src')
             if src is not None and 'data' in str(src):
                 continue
+            src = f'https:{src}' if src[:2] == '//' else src
+
             src: str = src if src is not None else res.get('data-src')
+
+            if src[0] == '/':
+                continue
 
             self._save_image(src)
             while True:
@@ -88,14 +108,29 @@ class ImageScraper:
 
     def _save_image(self, src):
         with closing(get(src, stream=True)) as resource:
+            filename: str = src.split('/')[-1]
+            dir_path: str = self._images_folder_path
             if resource.status_code == 200:
-                filepath = os.path.join(self._images_folder_path, src.split('/')[-1])
-                with open(filepath, 'wb') as f:
-                    for chunk in resource:
-                        f.write(chunk)
+                save_data_in_file(dir_path, filename, resource)
 
     def create_image_dir(self):
         os.mkdir(self._images_folder_path)
+
+
+class TextScraper:
+
+    def __init__(self, url: str, html_content_extractor: HtmlContentProvider = HtmlContentProvider(),
+                 text_extractor: TextExtractor = TextExtractor()):
+        self._html_content_extractor: HtmlContentProvider = html_content_extractor
+        self._text_extractor = text_extractor
+        self.url: str = url
+        self.resource_guid: str = str(uuid.uuid4())
+        self._texts_file_name: str = '_'.join([url_to_folder_name(self.url), self.resource_guid])
+
+    def pull_texts(self):
+        html_content: str = self._html_content_extractor.get_html(self.url)
+        text = self._text_extractor.extract_text_from_html(html_content)
+        save_data_in_file(TEXTS_DIR, '.'.join([self._texts_file_name, 'txt']), text, 'text')
 
 
 class WebsiteScraper:
@@ -105,5 +140,6 @@ class WebsiteScraper:
 
     def scrap_text(self, url: str) -> str:
         html_content: str = self._html_content_provider.get_html(url)
+
         return self._text_extractor.extract_text_from_html(html_content)
 

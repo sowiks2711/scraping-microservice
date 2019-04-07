@@ -21,4 +21,4 @@ class TestImageScraper(TestCase):
 
         for url, expected in test_cases:
             with self.subTest(name=str(url)):
-                self.assertEqual(self.image_extractor.url_to_folder_name(url), expected)
+                self.assertEqual(url_to_folder_name(url), expected)
