@@ -1,4 +1,5 @@
 import os
+import time
 import uuid
 
 from requests import get, Response
@@ -6,7 +7,8 @@ from requests.exceptions import RequestException
 from contextlib import closing
 from bs4 import BeautifulSoup
 
-from definitions import IMAGES_DIR
+from definitions import IMAGES_DIR, ARCHIVES_DIR
+import shutil
 
 
 def _is_correct_response(resp: Response) -> bool:
@@ -77,6 +79,12 @@ class ImageScraper:
             src: str = src if src is not None else res.get('data-src')
 
             self._save_image(src)
+            while True:
+                if os.path.isdir(self._images_folder_path):
+                    break
+                time.sleep(5)
+        archive_path = os.path.join(ARCHIVES_DIR, self._images_folder_name)
+        shutil.make_archive(archive_path, 'zip', self._images_folder_path)
 
     def _save_image(self, src):
         with closing(get(src, stream=True)) as resource:
