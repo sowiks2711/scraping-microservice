@@ -74,12 +74,12 @@ def save_data_in_file(dir_path, filename, resource, mode='binary'):
 
 
 class ImageScraper:
-    def __init__(self, url: str, html_content_extractor: HtmlContentProvider = HtmlContentProvider()):
+    def __init__(self, url: str, task_id: str, html_content_extractor: HtmlContentProvider = HtmlContentProvider()):
         self._html_content_extractor: HtmlContentProvider = html_content_extractor
         self.url: str = url
-        self.resource_guid: str = str(uuid.uuid4())
-        self._images_folder_name: str = '_'.join([url_to_folder_name(url), self.resource_guid])
-        self._images_folder_path: str = os.path.join(IMAGES_DIR, self._images_folder_name)
+        self.resource_guid: str = task_id
+        self.images_folder_name: str = '_'.join([url_to_folder_name(url), self.resource_guid])
+        self._images_folder_path: str = os.path.join(IMAGES_DIR, self.images_folder_name)
 
     def pull_images_from_html_references(self) -> None:
         html_content: str = self._html_content_extractor.get_html(self.url)
@@ -89,21 +89,22 @@ class ImageScraper:
         for res in soup.findAll('img'):
             print(res.get('src'))
             src: str = res.get('src')
-            if src is not None and 'data' in str(src):
-                continue
-            src = f'https:{src}' if src[:2] == '//' else src
+
 
             src: str = src if src is not None else res.get('data-src')
 
-            if src[0] == '/':
+            if src is None or src == '' or src[0] == '/' or 'data' in src:
                 continue
+
+            if src is not None:
+                src = f'https:{src}' if src[:2] == '//' else src
 
             self._save_image(src)
             while True:
                 if os.path.isdir(self._images_folder_path):
                     break
                 time.sleep(5)
-        archive_path = os.path.join(ARCHIVES_DIR, self._images_folder_name)
+        archive_path = os.path.join(ARCHIVES_DIR, self.images_folder_name)
         shutil.make_archive(archive_path, 'zip', self._images_folder_path)
 
     def _save_image(self, src):

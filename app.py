@@ -7,7 +7,7 @@ from celery import Celery
 import redis
 
 
-from definitions import ARCHIVES_DIR, TEXTS_DIR
+from definitions import ARCHIVES_DIR, TEXTS_DIR, IMAGES_SCRAPPING_TYPE, TEXTS_SCRAPPING_TYPE
 from models.models import TaskModel, INITIATED_STATUS, IMAGES_TYPE, TEXTS_TYPE
 from resource_scrapers.website_scraper import ImageScraper, TextScraper
 
@@ -39,45 +39,49 @@ def scrap():
     return response
 
 
+@celery.task(bind=True)
+def scraping_task(self, website_url: str, type: str):
+    resource_name: str = None
+
+    if type == IMAGES_SCRAPPING_TYPE:
+        resource_scraper: ImageScraper = ImageScraper(website_url, self.request.id.__str__())
+        resource_scraper.pull_images_from_html_references()
+        resource_name = resource_scraper.images_folder_name
+    elif type == TEXTS_SCRAPPING_TYPE:
+        resource_scraper: TextScraper = TextScraper(website_url, self.request.id.__str__())
+        resource_scraper.pull_texts()
+        resource_name = resource_scraper.texts_file_name
+
+    return {'resource_name': resource_name}
+
+
 @app.route('/scrap/images', methods=['POST'])
 def scrap_images() -> str:
     url: str = request.json['web_url']
-    resource_scraper: ImageScraper = ImageScraper(url)
 
-    task: TaskModel = TaskModel(resource_scraper.resource_guid, INITIATED_STATUS, url, None, IMAGES_TYPE)
-    r.set(f'task:{task.id}', json.dumps(task._asdict()))
+    task = scraping_task.apply_async(kwargs={'website_url': url, 'type': IMAGES_SCRAPPING_TYPE})
+    task_model: TaskModel = TaskModel(task.id, INITIATED_STATUS, url, None, IMAGES_TYPE)
+    r.set(f'task:{task_model.id}', json.dumps(task_model._asdict()))
 
-    resource_scraper.pull_images_from_html_references()
-    return jsonify({'taskId': task.id})
-
-@celery.task(bind=True)
-def text_scraping_task(self, website_url: str):
-
-    resource_scraper: TextScraper = TextScraper(website_url, self.request.id.__str__())
-
-    resource_scraper.pull_texts()
-    return {'resource_name': resource_scraper.texts_file_name}
+    return jsonify({'taskId': task_model.id})
 
 
 @app.route('/scrap/texts', methods=['POST'])
 def scrap_texts() -> str:
     url: str = request.json['web_url']
 
-    task = text_scraping_task.apply_async(kwargs={'website_url': url})
+    task = scraping_task.apply_async(kwargs={'website_url': url, 'type': TEXTS_SCRAPPING_TYPE})
 
-    task: TaskModel = TaskModel(task.id, INITIATED_STATUS, url, None, TEXTS_TYPE)
-    r.set(f'task:{task.id}', json.dumps(task._asdict()))
+    task_model: TaskModel = TaskModel(task.id, INITIATED_STATUS, url, None, TEXTS_TYPE)
+    r.set(f'task:{task.id}', json.dumps(task_model._asdict()))
 
-
-
-    return jsonify({'taskId': task.id})
+    return jsonify({'taskId': task_model.id})
 
 
 @app.route('/tasks/status', methods=['GET'])
 def get_task_status():
     task_id: str = request.args['task_id']
     task_model: TaskModel = get_updated_task_model(task_id)
-
 
     return jsonify({'task_id': task_id, 'task_status': task_model.status})
 
@@ -101,7 +105,10 @@ def get_task_resource():
 
 def get_updated_task_model(task_id) -> TaskModel:
     old_task_model: TaskModel = TaskModel.from_json(r.get(f'task:{task_id}'))
-    result: AsyncResult = text_scraping_task.AsyncResult(task_id)
+    result: AsyncResult = scraping_task.AsyncResult(task_id)
+
+    if result is None:
+        return None
 
     new_task_model = TaskModel(old_task_model.id, result.status, old_task_model.url,
                                result.info.get('resource_name', None), old_task_model.resource_type)
@@ -112,14 +119,14 @@ def get_updated_task_model(task_id) -> TaskModel:
 
 @app.route('/resources/download-images', methods=['GET'])
 def get_images_archive():
-    resource_file_name: str = request.args['task_resource_id']
+    resource_file_name: str = '.'.join([request.args['task_resource_id'], 'zip'])
 
     return send_from_directory(ARCHIVES_DIR, resource_file_name, as_attachment=True)
 
 
 @app.route('/resources/download-texts', methods=['GET'])
 def get_text_file():
-    resource_file_name: str = ''.join([request.args['task_resource_id'], 'txt'])
+    resource_file_name: str = '.'.join([request.args['task_resource_id'], 'txt'])
 
     return send_from_directory(TEXTS_DIR, resource_file_name, as_attachment=True)
 
