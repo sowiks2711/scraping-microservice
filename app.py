@@ -7,7 +7,7 @@ from celery import Celery
 import redis
 
 
-from definitions import ARCHIVES_DIR, TEXTS_DIR, IMAGES_SCRAPPING_TYPE, TEXTS_SCRAPPING_TYPE
+from definitions import ARCHIVES_DIR, TEXTS_DIR, IMAGES_SCRAPING_TYPE, TEXTS_SCRAPING_TYPE
 from models.models import TaskModel, INITIATED_STATUS, IMAGES_TYPE, TEXTS_TYPE
 from resource_scrapers.website_scraper import ImageScraper, TextScraper
 
@@ -43,11 +43,11 @@ def scrap():
 def scraping_task(self, website_url: str, type: str):
     resource_name: str = None
 
-    if type == IMAGES_SCRAPPING_TYPE:
+    if type == IMAGES_SCRAPING_TYPE:
         resource_scraper: ImageScraper = ImageScraper(website_url, self.request.id.__str__())
         resource_scraper.pull_images_from_html_references()
         resource_name = resource_scraper.images_folder_name
-    elif type == TEXTS_SCRAPPING_TYPE:
+    elif type == TEXTS_SCRAPING_TYPE:
         resource_scraper: TextScraper = TextScraper(website_url, self.request.id.__str__())
         resource_scraper.pull_texts()
         resource_name = resource_scraper.texts_file_name
@@ -59,7 +59,7 @@ def scraping_task(self, website_url: str, type: str):
 def scrap_images() -> str:
     url: str = request.json['web_url']
 
-    task = scraping_task.apply_async(kwargs={'website_url': url, 'type': IMAGES_SCRAPPING_TYPE})
+    task = scraping_task.apply_async(kwargs={'website_url': url, 'type': IMAGES_SCRAPING_TYPE})
     task_model: TaskModel = TaskModel(task.id, INITIATED_STATUS, url, None, IMAGES_TYPE)
     r.set(f'task:{task_model.id}', json.dumps(task_model._asdict()))
 
@@ -70,7 +70,7 @@ def scrap_images() -> str:
 def scrap_texts() -> str:
     url: str = request.json['web_url']
 
-    task = scraping_task.apply_async(kwargs={'website_url': url, 'type': TEXTS_SCRAPPING_TYPE})
+    task = scraping_task.apply_async(kwargs={'website_url': url, 'type': TEXTS_SCRAPING_TYPE})
 
     task_model: TaskModel = TaskModel(task.id, INITIATED_STATUS, url, None, TEXTS_TYPE)
     r.set(f'task:{task.id}', json.dumps(task_model._asdict()))
