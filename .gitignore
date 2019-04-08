@@ -125,3 +125,11 @@ dmypy.json
 #pycharm
 .idea/*
 .idea
+
+#tmp
+tmp/archives/*
+tmp/texts/*
+tmp/images/*
+
+#redis
+redis-stable/*

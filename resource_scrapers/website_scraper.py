@@ -119,27 +119,19 @@ class ImageScraper:
 
 class TextScraper:
 
-    def __init__(self, url: str, html_content_extractor: HtmlContentProvider = HtmlContentProvider(),
+    def __init__(self, url: str, task_id: str, html_content_extractor: HtmlContentProvider = HtmlContentProvider(),
                  text_extractor: TextExtractor = TextExtractor()):
         self._html_content_extractor: HtmlContentProvider = html_content_extractor
         self._text_extractor = text_extractor
         self.url: str = url
-        self.resource_guid: str = str(uuid.uuid4())
-        self._texts_file_name: str = '_'.join([url_to_folder_name(self.url), self.resource_guid])
+        self.resource_guid: str = task_id
+        self.texts_file_name: str = '_'.join([url_to_folder_name(self.url), self.resource_guid])
 
     def pull_texts(self):
         html_content: str = self._html_content_extractor.get_html(self.url)
         text = self._text_extractor.extract_text_from_html(html_content)
-        save_data_in_file(TEXTS_DIR, '.'.join([self._texts_file_name, 'txt']), text, 'text')
+        save_data_in_file(TEXTS_DIR, '.'.join([self.texts_file_name, 'txt']), text, 'text')
 
 
-class WebsiteScraper:
-    def __init__(self, html_content_provider: HtmlContentProvider, text_extractor: TextExtractor):
-        self._html_content_provider: HtmlContentProvider = html_content_provider
-        self._text_extractor: TextExtractor = text_extractor
 
-    def scrap_text(self, url: str) -> str:
-        html_content: str = self._html_content_provider.get_html(url)
-
-        return self._text_extractor.extract_text_from_html(html_content)
 

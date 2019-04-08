@@ -10,7 +10,7 @@ IMAGES_TYPE = 'images'
 TEXTS_TYPE = 'texts'
 
 
-class Task(NamedTuple):
+class TaskModel(NamedTuple):
     id: str
     status: str
     url: str
